@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PathPilot Hybrid</title>
+<style>
+:root{--bg:#0f172a;--card:#1e293b;--ac:#38bdf8;--tx:#e2e8f0;--mut:#94a3b8;--ok:#4ade80;--bad:#f87171;--warn:#fbbf24}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+header{padding:24px;text-align:center}header h1{margin:0;color:var(--ac)}header p{color:var(--mut);margin:6px 0 0}
+main{max-width:900px;margin:auto;padding:0 16px 40px}
+nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+nav button{flex:1;padding:10px;border:0;border-radius:8px;background:var(--card);color:var(--tx);cursor:pointer;font-weight:600}
+nav button.on{background:var(--ac);color:#0f172a}
+.card{background:var(--card);border-radius:12px;padding:18px;margin-bottom:14px}
+select,textarea,input{width:100%;padding:10px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:var(--tx);margin:6px 0 12px;font:inherit}
+textarea{min-height:130px}
+.go{background:var(--ac);color:#0f172a;border:0;padding:11px 20px;border-radius:8px;font-weight:700;cursor:pointer}
+.tag{display:inline-block;padding:4px 10px;border-radius:99px;margin:3px;font-size:13px}
+.ok{background:#14532d;color:var(--ok)}.bad{background:#7f1d1d;color:var(--bad)}
+.badge{display:inline-block;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:700;margin:6px 0}
+.b-dev{background:#14532d;color:var(--ok)}.b-cloud{background:#1e3a8a;color:#93c5fd}.b-off{background:#713f12;color:var(--warn)}
+.score{font-size:42px;font-weight:800;color:var(--ac)}
+pre{white-space:pre-wrap;font:inherit;line-height:1.5;margin:0}
+a{color:var(--ac)}.hide{display:none}.mut{color:var(--mut);font-size:13px}
+</style></head><body>
+<header><h1>PathPilot</h1><p>AI Career Navigator for Students &middot; on-device first, cloud fallback</p></header>
+<main>
+<div class="card">
+ <div id="status" class="mut">Starting...</div>
+ <button class="go" id="enable" style="margin-top:8px">Enable on-device AI</button> <span id="dl" class="mut"></span>
+ <label style="display:block;margin-top:12px">Target role</label><select id="role"></select>
+</div>
+<nav id="tabs">
+<button data-t="a" class="on">Resume Analyzer</button><button data-t="r">Roadmap</button>
+<button data-t="i">Interview Prep</button><button data-t="o">Opportunities</button><button data-t="s">Savings</button></nav>
+
+<section id="a" class="card"><label>Resume PDF upload</label><input type="file" id="file" accept=".pdf">
+<label>leda resume text paste cheyyandi</label><textarea id="txt"></textarea>
+<button class="go" id="btnA">Analyze</button><div id="aout"></div></section>
+
+<section id="r" class="card hide"><label>Weeks</label><input type="number" id="weeks" value="8" min="2" max="24">
+<button class="go" id="btnR">Generate Roadmap</button><div id="rout" style="margin-top:12px"></div></section>
+
+<section id="i" class="card hide"><button class="go" id="btnI">Generate Questions</button>
+<div id="iout" style="margin-top:12px"></div></section>
+
+<section id="o" class="card hide"><div id="oout"></div>
+<p class="mut">Deadlines maaruthuntayi. Official site lo confirm cheyyandi.</p></section>
+
+<section id="s" class="card hide"><p class="mut">Mundu Resume Analyzer run cheyyandi. Rates nee assumptions (INR).</p>
+<label>Paid resume review cost</label><input type="number" id="rr" value="500">
+<label>Paid career counseling session cost</label><input type="number" id="cc" value="1000">
+<label>Paid course cost per skill</label><input type="number" id="pc" value="2000">
+<button class="go" id="btnS">Calculate savings</button><div id="sout" style="margin-top:12px"></div></section>
+</main>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js";
+import { getAI, getGenerativeModel, GoogleAIBackend, InferenceMode } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-ai.js";
+import { firebaseConfig, CLOUD_MODEL } from "/static/firebase-config.js";
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+let missing = [], found = [], resumeText = "", model = null;
+const stats = { device: 0, cloud: 0, offline: 0 };
+
+// ---- Hybrid AI setup: on-device (Gemini Nano in Chrome) first, Firebase AI Logic cloud fallback ----
+try {
+  if (firebaseConfig.apiKey.startsWith("PASTE")) throw new Error("Firebase config not set");
+  const app = initializeApp(firebaseConfig);
+  const ai = getAI(app, { backend: new GoogleAIBackend() });
+  model = getGenerativeModel(ai, {
+    mode: InferenceMode.PREFER_ON_DEVICE,
+    inCloudParams: { model: CLOUD_MODEL },
+  });
+  $("status").textContent = "Hybrid AI ready: on-device first, cloud fallback.";
+} catch (e) {
+  console.warn(e);
+  $("status").textContent = "Firebase config set cheyyaledu: offline rules mode lo run avtundi.";
+  $("enable").classList.add("hide");
+}
+
+$("enable").onclick = async () => {   // user click kavali (model download ki)
+  $("dl").textContent = "Preparing...";
+  try {
+    await model.initializeDeviceModel(p => $("dl").textContent = "Downloading " + Math.round(p * 100) + "%");
+    $("dl").textContent = "On-device model ready";
+  } catch (e) {
+    console.warn(e);
+    $("dl").textContent = "On-device ee browser lo available kaadu, cloud use avtundi.";
+  }
+};
+
+async function aiText(prompt) {
+  if (!model) { stats.offline++; return null; }
+  try {
+    const r = await model.generateContent(prompt);
+    const src = r.response.inferenceSource === "on_device" ? "device" : "cloud";
+    stats[src]++;
+    return { text: r.response.text(), src };
+  } catch (e) { console.warn(e); stats.offline++; return null; }
+}
+const badge = src => src === "device" ? '<span class="badge b-dev">On-device (private, free)</span>'
+  : src === "cloud" ? '<span class="badge b-cloud">Cloud (Gemini)</span>'
+  : '<span class="badge b-off">Offline rules</span>';
+
+async function post(url, fd) {
+  const r = await fetch(url, { method: "POST", body: fd });
+  const j = await r.json(); if (!r.ok) throw new Error(j.detail || "Error"); return j;
+}
+
+fetch("/api/roles").then(r => r.json()).then(l => $("role").innerHTML = l.map(x => `<option>${x}</option>`).join(""));
+document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("#tabs button").forEach(x => x.classList.remove("on")); b.classList.add("on");
+  ["a","r","i","o","s"].forEach(t => $(t).classList.toggle("hide", t !== b.dataset.t));
+  if (b.dataset.t === "o") opps();
+});
+
+$("btnA").onclick = async () => {
+  const fd = new FormData(); fd.append("role", $("role").value); fd.append("resume_text", $("txt").value);
+  if ($("file").files[0]) fd.append("file", $("file").files[0]);
+  $("aout").innerHTML = "Analyzing...";
+  try {
+    const j = await post("/api/analyze", fd); missing = j.missing; found = j.found; resumeText = j.text;
+    $("aout").innerHTML = `<div class="score">${j.score}%</div><div class="mut">role match</div>
+      <h4>Skills found</h4>${j.found.map(s => `<span class="tag ok">${esc(s)}</span>`).join("") || "None"}
+      <h4>Missing skills</h4>${j.missing.map(s => `<span class="tag bad">${esc(s)}</span>`).join("") || "None"}
+      <h4>Resume tips</h4><ul>${j.tips.map(t => `<li>${esc(t)}</li>`).join("")}</ul>
+      <h4>AI suggestions</h4><div id="sug">Thinking...</div>`;
+    const r = await aiText(`You are a career coach. Target role: ${j.role}. Found skills: ${j.found}. Missing skills: ${j.missing}.
+Give 4 short, specific improvements for this student resume, in simple English.\n\nResume:\n${j.text}`);
+    $("sug").innerHTML = r ? badge(r.src) + `<pre>${esc(r.text)}</pre>` : badge("off") + '<p class="mut">AI available kaadu, paina rule-based tips chudandi.</p>';
+  } catch (e) { $("aout").innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`; }
+};
+
+$("btnR").onclick = async () => {
+  $("rout").innerHTML = "Generating...";
+  const r = await aiText(`Create a ${$("weeks").value}-week learning roadmap for a student targeting "${$("role").value}" who must learn: ${missing.join(", ") || "core skills"}. Week by week, prefer free resources, one mini-project per 2 weeks. Be concise.`);
+  if (r) { $("rout").innerHTML = badge(r.src) + `<pre>${esc(r.text)}</pre>`; return; }
+  const fd = new FormData(); fd.append("role", $("role").value); fd.append("missing", missing.join(",")); fd.append("weeks", $("weeks").value);
+  const j = await post("/api/roadmap", fd); $("rout").innerHTML = badge("off") + `<pre>${esc(j.roadmap)}</pre>`;
+};
+
+$("btnI").onclick = async () => {
+  $("iout").innerHTML = "Generating...";
+  const r = await aiText(`Give 8 interview questions with short model answers for a fresher applying as "${$("role").value}", focusing on: ${found.join(", ") || "core skills"}. Mix technical and HR questions.`);
+  if (r) { $("iout").innerHTML = badge(r.src) + `<pre>${esc(r.text)}</pre>`; return; }
+  const fd = new FormData(); fd.append("role", $("role").value); fd.append("skills", found.join(","));
+  const j = await post("/api/interview", fd); $("iout").innerHTML = badge("off") + `<pre>${esc(j.questions)}</pre>`;
+};
+
+$("btnS").onclick = async () => {
+  const fd = new FormData(); fd.append("missing_count", missing.length);
+  fd.append("resume_review", $("rr").value); fd.append("counseling", $("cc").value); fd.append("paid_course", $("pc").value);
+  const j = await post("/api/savings", fd);
+  $("sout").innerHTML = `<div class="score">₹${j.total.toLocaleString("en-IN")}</div><div class="mut">estimated money saved</div>
+    <ul><li>Resume review: ₹${j.resume_review}</li><li>Career counseling: ₹${j.counseling}</li>
+    <li>${j.free_courses} free learning paths instead of paid courses: ₹${j.courses}</li></ul>
+    <h4>AI calls this session</h4>
+    <p><span class="badge b-dev">On-device: ${stats.device}</span> <span class="badge b-cloud">Cloud: ${stats.cloud}</span> <span class="badge b-off">Offline: ${stats.offline}</span></p>
+    <p class="mut">On-device calls cost nothing and your resume never leaves your laptop. ${j.note}</p>`;
+};
+
+async function opps() {
+  const l = await (await fetch("/api/opportunities")).json();
+  $("oout").innerHTML = l.map(o => `<p><b><a href="${o.url}" target="_blank" rel="noopener">${esc(o.title)}</a></b> <span class="tag ok">${o.type}</span><br><span class="mut">${esc(o.note)}</span></p>`).join("");
+}
+</script></body></html>

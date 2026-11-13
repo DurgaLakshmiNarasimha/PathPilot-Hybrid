@@ -1,0 +1,5 @@
+Byalla Durga Lakshmi Narasimha
+Email: demo@example.com | GitHub: github.com/DurgaLakshmiNarasimha | LinkedIn: linkedin.com/in/demo
+Skills: Python, FastAPI, Selenium, Playwright, Docker, Git, SQL, REST API, AWS, Linux
+Projects: Built carrier portal automation reducing manual work by 40%. Deployed FastAPI services on Railway.
+Education: B.Tech Computer Science, 8.5 CGPA
